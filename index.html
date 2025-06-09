@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>影像-F2 (主页)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>影像-F2</h1>
+            <p>选择一个模块浏览全部病例，或进入“刷题模式”进行随机考核。图片和内容来自附二见习PPT，如有错误请向我回报。</p>
+        </header>
+
+        <nav id="module-selection">
+            </nav>
+
+        <main id="case-container">
+            </main>
+    </div>
+
+    <div id="case-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="zoom-modal" class="zoom-modal">
+        <span class="zoom-close">&times;</span>
+        <img class="zoom-modal-content" id="zoomed-img">
+    </div>
+
+    <script src="casedata.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

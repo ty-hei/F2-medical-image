@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F2-期中考试</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Helvetica Neue', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', 'Microsoft Yahei', sans-serif;
+        }
+        .quiz-option {
+            transition: all 0.2s ease-in-out;
+        }
+        .quiz-option:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .correct {
+            background-color: #d1fae5 !important;
+            border-color: #10b981 !important;
+        }
+        .incorrect {
+            background-color: #fee2e2 !important;
+            border-color: #ef4444 !important;
+        }
+        .explanation {
+            background-color: #f3f4f6;
+            border-left: 4px solid #6b7280;
+        }
+        .sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="app" class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar fixed md:relative z-20 w-64 bg-white shadow-lg p-5 overflow-y-auto h-full flex flex-col">
+            <div class="flex-shrink-0">
+                <h1 class="text-xl font-bold text-gray-900 mb-6">影像学复习助手</h1>
+                <nav id="category-nav">
+                    <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">知识模块</h2>
+                    <ul class="space-y-2">
+                        <!-- Categories will be populated by JS -->
+                    </ul>
+                </nav>
+            </div>
+
+            <div class="mt-auto pt-8 flex-shrink-0">
+                 <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">功能</h2>
+                 <button id="random-quiz-btn" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition mb-3">
+                    随机10题测验
+                </button>
+                <button id="mistake-book-btn" class="w-full bg-red-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-red-700 transition flex items-center justify-center">
+                    <span>错题本</span>
+                    <span id="mistake-counter" class="ml-2 bg-red-800 text-xs font-bold px-2 py-0.5 rounded-full hidden">0</span>
+                </button>
+                <button id="clear-mistakes-btn" class="w-full text-xs text-gray-500 hover:text-red-600 transition mt-2">清空错题记录</button>
+            </div>
+
+             <button id="close-sidebar" class="md:hidden absolute top-4 right-4 text-gray-500 hover:text-gray-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto p-4 md:p-8">
+            <button id="menu-button" class="md:hidden mb-4 p-2 rounded-md bg-white shadow flex items-center">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                 <span class="ml-2 font-semibold">选择模块 / 功能</span>
+            </button>
+            
+            <div id="quiz-container" class="max-w-4xl mx-auto">
+                 <div id="welcome-message" class="text-center p-8 bg-white rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-2 text-gray-800">欢迎来到医学影像学复习助手 V2.0</h2>
+                    <p class="text-gray-600">请从左侧选择一个知识模块开始学习，或点击“随机测验”、“错题本”挑战自己！</p>
+                </div>
+                <!-- Questions will be populated here -->
+            </div>
+            
+            <div id="quiz-controls" class="max-w-4xl mx-auto mt-6 text-center hidden">
+                 <button id="prev-btn" class="bg-gray-300 text-gray-700 py-2 px-6 rounded-lg font-semibold hover:bg-gray-400 transition mr-4 disabled:opacity-50" disabled>上一题</button>
+                 <span id="question-counter" class="font-semibold text-lg align-middle"></span>
+                 <button id="next-btn" class="bg-indigo-600 text-white py-2 px-6 rounded-lg font-semibold hover:bg-indigo-700 transition ml-4 disabled:opacity-50" disabled>下一题</button>
+            </div>
+            
+            <div id="quiz-results" class="max-w-4xl mx-auto mt-6 hidden">
+                <!-- Results will be populated here -->
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const allQuestions = [
+            // --- 影像学基础 ---
+            { id: 1, category: '影像学基础', type: 'mcq', question: '下列关于X线成像基本原理的描述,错误的是', options: { A: '基于X线的穿透性、荧光效应和感光效应', B: '基于人体组织结构之间有密度和厚度的差别', C: 'X线图像的形成,有3个基本条件不可缺少,即X线的穿透力,人体的密度和厚度的差异使X线的吸收量不相同、穿过人体的剩余X线,产生层次差异的X线图像', D: '组织结构以及器官的密度和厚度的差别是产生影像对比的基础', E: '密度高的组织在X线片中呈黑影,密度低的组织在X线片呈白影' }, correctAnswer: 'E', explanation: '密度高的组织（如骨骼）吸收X线多，在X线片上呈白色或高密度影；密度低的组织（如空气）吸收X线少，在X线片上呈黑色或低密度影。' },
+            { id: 2, category: '影像学基础', type: 'mcq', question: '骨,肌肉,脂肪,液体,空气在X线片上的黑白程度(由黑到白),正确的是', options: { A: '空气、脂肪、液体、肌肉、骨骼', B: '空气、液体、脂肪、肌肉、骨骼', C: '空气,脂肪、液体、骨骼、肌肉', D: '脂肪、空气、液体、骨骼、肌肉', E: '脂肪,空气、液体、肌肉、骨骼' }, correctAnswer: 'A', explanation: 'X线穿透性从强到弱依次是：空气>脂肪>液体/软组织>骨骼。穿透性越强，胶片上感光越多，颜色越黑。所以由黑到白的顺序是空气、脂肪、软组织(含液体/肌肉)、骨骼。' },
+            { id: 3, category: '影像学基础', type: 'mcq', question: '与平片相比,下列不属于CT 优势的是', options: { A: '密度分辨力高', B: '解剖分辨力高', C: '空间分辨力高', D: '增强检查有利于病灶定性', E: '可进行多方位重建' }, correctAnswer: 'C', explanation: 'CT的密度分辨率非常高，但其空间分辨率通常低于X线平片。平片可以更清晰地显示微小的骨骼结构细节。' },
+            { id: 4, category: '影像学基础', type: 'mcq', question: '透视的缺点是', options: { A: '不能了解器官的动态改变', B: '不可转动患者体位', C: '缺乏客观记录', D: '辐射剂量小', E: '操作不便' }, correctAnswer: 'C', explanation: '透视可以实时观察器官动态，方便转动体位，但主要缺点是缺乏永久性的图像记录，且对医生和患者的辐射剂量相对较大。' },
+            { id: 5, category: '影像学基础', type: 'mcq', question: '以下属于直接数字化X线摄影的是', options: { A: 'CT', B: 'MRI', C: 'DSA', D: 'CR', E: 'DR' }, correctAnswer: 'E', explanation: 'DR (Digital Radiography) 是直接将X线光子通过探测器转换为数字信号，是直接数字化X线摄影。CR (Computed Radiography) 是间接数字化，需要使用影像板（IP板）并进行读取。' },
+            { id: 6, category: '影像学基础', type: 'mcq', question: '胸部摄影的基础是依赖', options: { A: '自然对比', B: '人工对比', C: '双重对比', D: '弛豫时间差异', E: '组织密度' }, correctAnswer: 'A', explanation: '胸部含有气体（肺）、软组织（心脏、肌肉）和骨骼（肋骨），这些组织之间存在天然的密度差异，形成了良好的自然对比，因此不需要造影剂。' },
+            { id: 7, category: '影像学基础', type: 'mcq', question: '下列哪一项不是MRI检查的禁忌症', options: { A: '年老体弱者', B: '体内置有心脏起搏器', C: '幽闭恐惧症', D: '体内有铁磁性手术夹', E: '体内胰岛素泵' }, correctAnswer: 'A', explanation: '年老体弱本身不是MRI的绝对禁忌症，但需要评估患者的配合能力和生命体征。心脏起搏器、铁磁性夹、胰岛素泵等是绝对或相对禁忌症，幽闭恐惧症患者可能无法完成检查。' },
+            { id: 8, category: '影像学基础', type: 'mcq', question: '在T1加权MR图像上，哪种组织通常呈现高信号', options: { A: '脑脊液', B: '骨骼肌', C: '皮下脂肪', D: '软骨', E: '骨皮质' }, correctAnswer: 'C', explanation: '在T1WI上，脂肪组织因其T1弛豫时间短而呈现高信号。脑脊液为低信号，肌肉为中等信号，骨皮质为无信号（黑色）。' },
+            { id: 50, category: '影像学基础', type: 'mcq', question: 'X线摄影的基础是', options: { A: '荧光效应', B: '感光效应', C: '电离效应', D: 'X线为肉眼看不见的光', E: '穿透性' }, correctAnswer: 'B', explanation: '感光效应是X线使胶片感光形成图像的基础。' },
+            { id: 51, category: '影像学基础', type: 'mcq', question: 'X线成像的基础是', options: { A: '荧光效应', B: '感光效应', C: '电离效应', D: 'X线为肉眼看不见的光', E: '穿透性' }, correctAnswer: 'E', explanation: 'X线的穿透性及其在不同组织中被吸收的差异是形成影像对比的基础。' },
+            { id: 52, category: '影像学基础', type: 'mcq', question: '透视检查的基础是', options: { A: '荧光效应', B: '感光效应', C: '电离效应', D: 'X线为肉眼看不见的光', E: '穿透性' }, correctAnswer: 'A', explanation: '荧光效应是X线照射到荧光物质上使其发光，是透视和影像增强器的物理基础。' },
+            { id: 53, category: '影像学基础', type: 'mcq', question: '放射治疗的基础是', options: { A: '荧光效应', B: '感光效应', C: '电离效应', D: 'X线为肉眼看不见的光', E: '穿透性' }, correctAnswer: 'C', explanation: '电离效应是X线等射线通过物质时使其原子或分子电离，从而引起生物效应，这是放射治疗的基础。' },
+
+            // --- 神经系统 ---
+            { id: 9, category: '神经系统', type: 'mcq', question: '功能性 MR 检查中 DWI 对下列哪种疾病诊断价值最大', options: { A: '急性脑出血', B: '急性脑梗死', C: '硬膜外血肿', D: '硬膜下血肿', E: '动静脉畸形' }, correctAnswer: 'B', explanation: 'DWI（弥散加权成像）对水分子的弥散运动非常敏感。在急性脑梗死（数小时内）的早期阶段，细胞毒性水肿导致水分子弥散受限，在DWI上表现为明显的高信号，是诊断超急性期和急性期脑梗死的金标准。' },
+            { id: 10, category: '神经系统', type: 'mcq', question: 'CT检查优于 MRI的脑疾病为', options: { A: '急性脑出血', B: '急性脑梗死', C: '亚急性脑血肿', D: '脱髓鞘疾病', E: '小脑肿瘤' }, correctAnswer: 'A', explanation: 'CT对急性期（数小时至3天）的出血极为敏感，表现为高密度影，且检查速度快、普及率高，是诊断急性脑出血的首选方法。MRI在显示脑梗死、脱髓鞘和肿瘤方面优于CT。' },
+            { id: 11, category: '神经系统', type: 'mcq', question: '下列关于 MRI 平扫颅脑信号的描述,错误的是', options: { A: '骨髓在T1WI为低信号,在T2WI 为高信号', B: '脑脊液在T1WI为低信号,在T2W1 为高信号', C: '颅骨内外板在T1WI.T2WI均为低信号', D: '平扫时血管内液体在T1WI T2WI为低信号', E: '颅骨板障在T1WI.T2W1均为高信号' }, correctAnswer: 'A', explanation: '正常的骨髓含有脂肪，因此在T1WI上应为高信号。在T2WI上信号强度可变。A选项描述反了。' },
+            { id: 12, category: '神经系统', type: 'mcq', question: '星形细胞瘤分四级,属于1级星形细胞瘤 CT表现的是', options: { A: '常无强化', B: '团块增强', C: '花冠状强化', D: '瘤周水肿明显', E: '占位效应明显' }, correctAnswer: 'A', explanation: '1级星形细胞瘤（如毛细胞星形细胞瘤）是低级别肿瘤，血脑屏障相对完整，通常表现为边界清晰的囊实性占位，实性部分可有强化，但一般不强化或轻度强化，水肿和占位效应不显著。花冠状强化是高级别胶质母细胞瘤的特征。' },
+            { id: 13, category: '神经系统', type: 'mcq', question: '脑膜瘤的好发部位不包括', options: { A: '矢状窦旁', B: '大脑凸面', C: '蝶骨嵴', D: '大脑镰旁', E: '侧脑室外侧白质区' }, correctAnswer: 'E', explanation: '脑膜瘤起源于蛛网膜帽状细胞，因此好发于脑实质外的、有蛛网膜颗粒的部位，如矢状窦旁、大脑凸面、蝶骨嵴、大脑镰旁、鞍结节等。侧脑室外侧白质区是脑实质内，不是脑膜瘤的好发部位。' },
+            { id: 54, category: '神经系统', type: 'mcq', question: '硬膜下血肿呈', options: { A: '梭形', B: '新月形', C: '弥漫性脑沟分布', D: '脑室形', E: '混杂密度斑片状' }, correctAnswer: 'B', explanation: '硬膜下血肿发生于硬脑膜与蛛网膜之间，血液可以沿大脑表面广泛分布，受脑沟脑回限制，形成贴合大脑表面的新月形或半月形高密度影。' },
+            { id: 55, category: '神经系统', type: 'mcq', question: '硬膜外血肿呈', options: { A: '梭形', B: '新月形', C: '弥漫性脑沟分布', D: '脑室形', E: '混杂密度斑片状' }, correctAnswer: 'A', explanation: '硬膜外血肿发生于颅骨内板和硬脑膜之间，由于硬脑膜在颅缝处与颅骨粘连紧密，血肿范围受颅缝限制，常形成典型的双凸透镜状或梭形高密度影。' },
+            { id: 56, category: '神经系统', type: 'mcq', question: '蛛网膜下腔出血呈', options: { A: '梭形', B: '新月形', C: '弥漫性脑沟分布', D: '脑室形', E: '混杂密度斑片状' }, correctAnswer: 'C', explanation: '蛛网膜下腔出血是血液进入蛛网膜下腔，CT上表现为血液沿脑沟、脑裂、脑池分布，呈高密度充填影。' },
+            { id: 14, category: '神经系统', type: 'mcq', question: '下列关于垂体大腺瘤的CT表现的描述,错误的是', options: { A: '蝶鞍扩大', B: '鞍底下陷', C: '瘤周水肿', D: '肿瘤呈均匀、不均匀或环形强化', E: '垂体柄移位' }, correctAnswer: 'C', explanation: '垂体腺瘤是良性肿瘤，生长缓慢，通常不引起明显的瘤周水肿。瘤周水肿常见于恶性肿瘤或急性病变。' },
+            { id: 15, category: '神经系统', type: 'mcq', question: '下列关于听神经瘤的描述,错误的是', options: { A: '内听道口扩大', B: '脑外肿瘤', C: '均匀或不均匀强化', D: '可坏死、囊变', E: '一般不影响第四脑室' }, correctAnswer: 'E', explanation: '听神经瘤生长在桥小脑角区，当肿瘤体积较大时，会压迫、推移第四脑室，甚至引起梗阻性脑积水。' },
+            { id: 16, category: '神经系统', type: 'mcq', question: '颅咽管瘤较具特征性的钙化呈', options: { A: '块状', B: '壳状', C: '散在钙化', D: '毛线团样', E: '爆米花样' }, correctAnswer: 'B', explanation: '颅咽管瘤中钙化非常常见（约80%），典型的钙化形态为弧形或壳状钙化。爆米花样钙化是错构瘤的特征。' },
+
+            // --- 胸部 ---
+            { id: 17, category: '胸部', type: 'mcq', question: 'X线胸片中的中肺野指的是', options: { A: '第2.4肋骨最低点之间的区域', B: '第2.4 肋骨前端下缘之间的区域', C: '第2.4 肋骨前端上缘之间的区域', D: '第2肋骨前端上缘,第4肋骨前端下缘之间的区域', E: '第2肋骨前端上缘、第4肋骨前端上缘之间的区域' }, correctAnswer: 'B', explanation: '肺野划分：上肺野为锁骨上端至第2肋骨前端下缘；中肺野为第2至第4肋骨前端下缘之间；下肺野为第4肋骨前端下缘以下。' },
+            { id: 19, category: '胸部', type: 'mcq', question: '右上肺不张X线表现不包括', options: { A: '右上叶呈密度增加的大片阴影', B: '叶间裂向上移位', C: '气管可向右侧移位', D: '右中下叶呈代偿性肺气肿', E: '右肺门阴影向下移位' }, correctAnswer: 'E', explanation: '右上肺不张时，由于肺叶体积缩小，会将周围结构向患侧牵拉。因此右肺门阴影会向上移位，而不是向下移位。' },
+            { id: 20, category: '胸部', type: 'mcq', question: '下列关于肺内恶性肿瘤的描述,错误的是', options: { A: '肿瘤多无包膜,呈浸润性生长', B: '肿瘤呈分叶,有短毛刺', C: '肿瘤易发生坏死而形成厚壁空洞', D: '肿瘤内常见钙化且有卫星灶', E: '肿瘤靠近胸膜时可形成胸膜凹陷' }, correctAnswer: 'D', explanation: '肿瘤内钙化和卫星灶是良性病变（如结核瘤）的特征，而不是恶性肿瘤的常见表现。恶性肿瘤钙化少见，且多为偏心、不定形钙化。' },
+             { id: 21, category: '胸部', type: 'mcq', question: '厚壁空洞的壁厚应不小于', options: { A: '2mm', B: '2.5mm', C: '3mm', D: '3.5mm', E: '4mm' }, correctAnswer: 'C', explanation: '通常临床上认为空洞壁厚度大于等于3mm或4mm时，恶性肿瘤的可能性较大，称为厚壁空洞。3mm是一个常用的界值。' },
+            { id: 22, category: '胸部', type: 'mcq', question: '支气管扩张的CT表现不包括', options: { A: '肺纹理聚拢或稀少', B: '支气管呈串珠样改变', C: '支气管走行表现为双轨征', D: '支气管断面呈印戒征', E: '支气管远端呈葡萄串样阴影' }, correctAnswer: 'A', explanation: '肺纹理聚拢或稀少是肺不张或肺纤维化的表现，而不是支气管扩张的直接征象。支气管扩张的典型CT表现包括“双轨征”（管壁增厚）、“印戒征”（支气管内径大于伴行动脉）、远端囊状扩张（葡萄串样）等。' },
+             { id: 23, category: '胸部', type: 'mcq', question: '肺结核原发综合征的典型表现为', options: { A: '位于右上肺的片状阴影', B: '病变区伸向肺门的条索状影', C: '肺门气管支气管淋巴结肿大', D: '两肺散在斑点密度增高影', E: '原发浸润灶、肺门淋巴结增大及结核性淋巴管炎组成“哑铃”状影' }, correctAnswer: 'E', explanation: '原发综合征（Primary Complex）三联征包括：1. 肺内原发病灶；2. 引流淋巴管炎；3. 肺门或纵隔淋巴结肿大。这三者在X线上连接起来，形态酷似哑铃。' },
+             { id: 24, category: '胸部', type: 'mcq', question: '病肺体积增大的疾病是', options: { A: '肺气肿', B: '肺不张', C: '肺纤维化', D: '气胸', E: '纵隔气肿' }, correctAnswer: 'A', explanation: '肺气肿是由于肺泡过度充气、弹性减弱，导致肺总体积增大。肺不张和肺纤维化会导致肺体积缩小。' },
+             { id: 25, category: '胸部', type: 'mcq', question: '下列哪项征象高度提示结核球瘤', options: { A: '周围见“卫星灶”', B: '边缘光滑', C: '不定形钙化', D: '边界清晰锐利', E: '边缘分叶' }, correctAnswer: 'A', explanation: '卫星灶，即主病灶周围散在的小结节或条索影，是结核病变的特征性表现，高度提示结核球瘤的诊断。' },
+            { id: 57, category: '胸部', type: 'mcq', question: '构成肺纹理的主要结构是', options: { A: '肺动脉、肺静脉、支气管', B: '神经', C: '主支气管', D: '肺组织', E: '淋巴管' }, correctAnswer: 'A', explanation: '肺纹理主要是由肺动脉和肺静脉分支构成的树枝状阴影，也包含部分支气管壁和淋巴管。' },
+            { id: 58, category: '胸部', type: 'mcq', question: '中央型肺癌的直接征象是', options: { A: '黏液嵌塞征', B: '局限性肺气肿', C: '段或叶肺不张', D: '肺门肿块', E: '胸膜牵拉' }, correctAnswer: 'D', explanation: '肺门肿块是中央型肺癌本身的表现，属于直接征象。其他选项如肺不张、阻塞性肺炎等均是由于肿瘤阻塞支气管引起的间接征象。' },
+            { id: 59, category: '胸部', type: 'mcq', question: '不引起纵隔移位的病变有', options: { A: '张力性气胸', B: '主支气管异物', C: '大量胸腔积液', D: '弥漫性肺气肿', E: '肺叶性肺不张' }, correctAnswer: 'D', explanation: '弥漫性肺气肿是双侧肺体积普遍增大，对纵隔的压力相对均衡，通常不引起纵隔明显移位。而单侧的病变如张力性气胸、大量胸腔积液（推移）、肺不张（牵拉）都会导致纵隔移位。' },
+            { id: 60, category: '胸部', type: 'case', question: '男，65岁，咳嗽，右胸痛，痰中带血丝1周。胸部后前位片示：右肺门影增大,右上肺大片状致密影，水平裂呈反"S”样改变。最可能的诊断是：', options: { A: '右上肺支气管肺炎', B: '右上肺囊肿', C: '右上肺癌', D: '右上肺结核', E: '右上肺脓肿' }, correctAnswer: 'C', explanation: '右肺门肿块（中央型肺癌）导致右上叶肺不张，不张的肺叶与肿块共同构成了“反S征”（Golden S sign），这是中央型肺癌伴右上叶不张的特征性表现。' },
+            { id: 61, category: '胸部', type: 'mcq', question: 'Kerley B线见于', options: { A: '肺动脉高压', B: '间质性肺水肿', C: '肺泡性肺水肿', D: '肺血增多', E: '肺血减少' }, correctAnswer: 'B', explanation: 'Kerley B线是由于小叶间隔液体渗出、增厚所致，是间质性肺水肿的特征性X线表现。' },
+            { id: 62, category: '胸部', type: 'mcq', question: '蝶翼征见于', options: { A: '肺动脉高压', B: '间质性肺水肿', C: '肺泡性肺水肿', D: '肺血增多', E: '肺血减少' }, correctAnswer: 'C', explanation: '蝶翼征或蝙蝠翼征，指肺水肿集中在双侧肺门区域，呈蝶翼状分布，是急性肺泡性肺水肿的典型表现。' },
+
+            // --- 心脏与大血管 ---
+            { id: 26, category: '心脏与大血管', type: 'mcq', question: '在立位后前位X线摄片上,心脏左缘的结构自上而下的顺序为', options: { A: '主动脉弓,肺动脉、右心室、左心室', B: '肺动脉、主动脉弓,左心房耳、右心室', C: '主动脉弓、肺动脉、左心房耳、左心室', D: '主动脉弓,肺动脉,左心房耳、右心室', E: '主动脉弓、肺动脉、右心房、左心室' }, correctAnswer: 'C', explanation: '心脏正位片左缘自上而下由三段弧构成：1. 主动脉弓（主动脉球）；2. 肺动脉段；3. 左心室。在某些病理情况下（如二尖瓣狭窄），左心房耳突出，会形成第四个弧。' },
+            { id: 27, category: '心脏与大血管', type: 'mcq', question: '风湿性心脏病二尖瓣狭窄的X线表现不包括', options: { A: '右心缘有双心房阴影', B: '肺淤血', C: '左心缘出现病理性第三弓', D: '右前斜位心后上缘压迫充盈钡剂的食管', E: '左前斜位心后缘下段向后下突出' }, correctAnswer: 'E', explanation: '左前斜位心后缘下段向后下突出是左心室增大的表现。二尖瓣狭窄主要是左心房和右心室增大，左心室通常不大或缩小。其他选项都是二尖瓣狭窄的典型表现。' },
+            { id: 28, category: '心脏与大血管', type: 'mcq', question: '二尖瓣狭窄的心脏形态是', options: { A: '靴形', B: '梨形', C: '雪人征', D: '球形', E: '八字形' }, correctAnswer: 'B', explanation: '二尖瓣狭窄导致左房、右室增大，肺动脉段突出，而主动脉弓相对较小，心腰部膨出，整个心影呈“梨形”或“二尖瓣型”心。靴形心见于法洛四联症。' },
+            { id: 29, category: '心脏与大血管', type: 'mcq', question: '下列关于法洛四联症X线表现的描述,错误的是', options: { A: '右心室增大', B: '肺动脉段凹陷', C: '心左下缘为向上翘起的心尖,左、右心房无明显改变', D: '肺动脉狭窄和肺血少,重者可能见到侧支循环', E: '左心室增大' }, correctAnswer: 'E', explanation: '法洛四联症是紫绀型先天性心脏病，病理基础是肺动脉狭窄、室间隔缺损、主动脉骑跨、右心室肥厚。由于血液分流，左心室血量减少，因此左心室不大或缩小。心尖上翘、肺动脉段凹陷形成“靴形心”，是其典型特征。' },
+            { id: 30, category: '心脏与大血管', type: 'mcq', question: '缩窄性心包炎的特异性X线表现为', options: { A: '心包蛋壳样钙化', B: '左心房增大', C: '肺淤血', D: '球形心', E: '上腔静脉扩张' }, correctAnswer: 'A', explanation: '心包钙化，尤其是蛋壳样钙化，是缩窄性心包炎最具特征性的X线征象，虽然不是所有患者都有，但一旦出现，诊断价值极高。' },
+            { id: 63, category: '心脏与大血管', type: 'mcq', question: '房间隔缺损时表现为', options: { A: '右心室、右心房增大,肺充血,有肺门舞蹈', B: '右心室,左心室增大,肺充血,有肺门舞蹈', C: '右心房,右心室增大,肺血少,无肺门舞蹈', D: '右心房、右心室增大,肺淤血,无肺门舞蹈', E: '右心房、左心室增大,肺淤血,无肺门舞蹈' }, correctAnswer: 'A', explanation: '房间隔缺损是左向右分流，导致右心房、右心室负荷增加而增大，肺循环血量增多（肺充血），肺动脉搏动增强，形成“肺门舞蹈”。' },
+            { id: 64, category: '心脏与大血管', type: 'mcq', question: '室间隔缺损时表现为', options: { A: '右心室、右心房增大,肺充血,有肺门舞蹈', B: '右心室,左心室增大,肺充血,有肺门舞蹈', C: '右心房,右心室增大,肺血少,无肺门舞蹈', D: '右心房、右心室增大,肺淤血,无肺门舞蹈', E: '右心房、左心室增大,肺淤血,无肺门舞蹈' }, correctAnswer: 'B', explanation: '室间隔缺损是左向右分流，血液从左心室流入右心室，导致右心室、左心室（回心血量增加）均增大，肺循环血量增多（肺充血），肺动脉搏动增强，形成“肺门舞蹈”。' },
+
+            // --- 消化系统 ---
+            { id: 31, category: '消化系统', type: 'mcq', question: '正常食管有几个生理性压迹', options: { A: '4', B: '3', C: '2', D: '1', E: '5' }, correctAnswer: 'B', explanation: '正常食管有三个生理性狭窄（压迹）：1. 颈部环咽肌处；2. 胸部主动脉弓和左主支气管压迹；3. 膈食管裂孔处。' },
+            { id: 32, category: '消化系统', type: 'mcq', question: '胃肠钡餐造影时,十二指肠球部溃疡出现的间接征象不包括', options: { A: '激惹征', B: '幽门痉挛,开放延迟', C: '胃液分泌增多', D: '胃张力高、蠕动增强', E: '龛影' }, correctAnswer: 'E', explanation: '龛影（Niche）是溃疡的直接征象，指溃疡凹陷被钡剂充填形成的突出于腔外的影像。其他选项均为由溃疡引起的周围功能性或形态性改变，属于间接征象。' },
+            { id: 33, category: '消化系统', type: 'mcq', question: '肝脓肿的典型CT表现是', options: { A: '原发性肝细胞癌', B: '肝海绵状血管瘤', C: '肝转移瘤', D: '晕征或双环征', E: '肝囊肿' }, correctAnswer: 'D', explanation: '肝脓肿在CT增强扫描时，脓肿壁（富含血管的肉芽组织）呈环形强化，而周围的肝组织因水肿而呈低密度，内外两层形成“晕征”或“双环征”。' },
+            { id: 34, category: '消化系统', type: 'mcq', question: '下列关于肝海绵状血管瘤的描述,错误的是', options: { A: '肿瘤的强化表现为快进快出', B: 'T1WI 肿瘤表现为均匀的低信号,T2WI肿瘤表现为均匀的高信号', C: 'T2WI肿瘤表现为均匀的高信号,随着回波时间延长信号强度增高,表现为灯泡征', D: '肿瘤的强化表现为早出晚归', E: '肿瘤从边缘开始强化,逐渐向中心填充' }, correctAnswer: 'A', explanation: '“快进快出”是原发性肝细胞癌的典型强化特征。肝海绵状血管瘤的强化方式是“早出晚归”或“快进慢出”，即动脉期开始强化，并持续到门脉期和延迟期，表现为从边缘向中心的结节状或“开花样”填充。' },
+            { id: 35, category: '消化系统', type: 'mcq', question: '肝转移瘤的典型CT表现是', options: { A: '肝囊肿', B: '肝脓肿', C: '原发性肝癌', D: '牛眼征或靶征', E: '肝棘球蚴病' }, correctAnswer: 'D', explanation: '牛眼征（Target sign）是肝转移瘤的典型表现之一，尤其是在富血供肿瘤的转移灶中，肿瘤中心因坏死或纤维化呈低密度，周围呈环形强化，形成靶环样外观。' },
+            { id: 36, category: '消化系统', type: 'mcq', question: 'CT上，下列哪项是急性胰腺炎的典型表现', options: { A: '胰腺肿大，边缘模糊', B: '胰周脂肪间隙清晰', C: '肾前筋膜无增厚', D: '胰腺内无钙化灶', E: '无假性囊肿形成' }, correctAnswer: 'A', explanation: '急性胰腺炎时，由于炎症和水肿，CT表现为胰腺弥漫性或局限性肿大，密度减低，边缘模糊不清，胰周脂肪间隙模糊，常伴有液体渗出和肾前筋膜增厚。' },
+            { id: 65, category: '消化系统', type: 'mcq', question: '绞窄性肠梗阻的典型X线表现是', options: { A: '小肠呈阶梯状液平', B: '孤立、固定的扩张肠袢', C: '肠管充气呈咖啡豆征', D: '全部肠管轻度充气,并有小液平', E: '腹腔内有游离气体' }, correctAnswer: 'C', explanation: '咖啡豆征是乙状结肠扭转（一种闭袢性肠梗阻，属于绞窄性）的典型X线表现。孤立、固定的扩张肠袢也是绞窄性肠梗阻的一个重要征象。此题C为最佳答案。' },
+            { id: 66, category: '消化系统', type: 'mcq', question: '单纯性肠梗阻的可靠X线征象是', options: { A: '扩张肠管及阶梯状液平', B: '在中下腹部或右下腹部', C: '肠管充气呈咖啡豆征', D: '全部肠管轻度充气,并有小液平', E: '腹腔内有游离气体' }, correctAnswer: 'A', explanation: '单纯性机械性肠梗阻的典型表现是梗阻近端肠管扩张、充气、积液，立位片上可见多个宽大的液平，呈阶梯状排列。' },
+            { id: 67, category: '消化系统', type: 'mcq', question: '胃、十二指肠穿孔的可靠X线征象是', options: { A: '小肠呈阶梯状液平', B: '在中下腹部或右下腹部', C: '肠管充气呈咖啡豆征', D: '全部肠管轻度充气,并有小液平', E: '膈下新月形游离气体' }, correctAnswer: 'E', explanation: '胃肠道穿孔后，气体逸出至腹腔，在立位X线片上，气体聚集在肝脏或胃底与膈肌之间，形成特征性的“膈下游离气体”或新月形透亮区，是诊断消化道穿孔最可靠的征象。' },
+
+            // --- 泌尿系统 ---
+            { id: 38, category: '泌尿系统', type: 'mcq', question: '检查泌尿系结石首选的影像学方法是', options: { A: 'CT', B: 'MRI', C: '超声', D: 'IVP', E: '腹部平片' }, correctAnswer: 'A', explanation: 'CT，特别是泌尿系CT平扫（CTU），对各种成分和大小的结石都非常敏感，不受肠气干扰，并能显示结石引起的梗阻情况，是目前诊断泌尿系结石的首选和金标准方法。' },
+            { id: 39, category: '泌尿系统', type: 'mcq', question: '下列关于肾自截的描述,错误的是', options: { A: '静脉肾盂造影可见肾盏破坏和脓腔形成', B: '全肾为干酪坏死物质和空洞所替代', C: '肾大部或全肾钙化', D: '肾功能完全丧失', E: '静脉尿路造影不显影' }, correctAnswer: 'A', explanation: '肾自截是肾结核的终末期表现，此时肾功能已完全丧失，因此静脉尿路造影（IVP）时患侧肾脏不会显影。A选项描述的是尚有部分功能的活动期肾结核表现。' },
+
+            // --- 骨骼肌肉系统 ---
+            { id: 40, category: '骨骼肌肉系统', type: 'mcq', question: '临时钙化带位于', options: { A: '原始骨化中心', B: '继发骨化中心', C: '骨干', D: '干骺端末端', E: '干骺端' }, correctAnswer: 'D', explanation: '临时钙化带是干骺端的组成部分，紧邻骺板，是软骨内成骨过程中的活跃区域，X线上表现为靠近骺板的一条致密线。' },
+            { id: 41, category: '骨骼肌肉系统', type: 'mcq', question: '骨质疏松是指单位体积内', options: { A: '有机成分和钙盐都减少', B: '有机成分减少,钙盐正常', C: '有机成分正常,钙盐增多', D: '有机成分正常,钙盐减少', E: '有机成分正常,钙盐正常' }, correctAnswer: 'A', explanation: '骨质疏松是指单位体积骨量减少，包括骨基质（有机成分）和骨矿物质（钙盐）成比例地减少，但其化学成分比例正常。' },
+            { id: 42, category: '骨骼肌肉系统', type: 'mcq', question: '描述长骨骨折移位是以哪个为参照', options: { A: '骨折近端', B: '骨折远端', C: '骨折近端和远端', D: '骨折断端成角', E: '骨折远端移位程度' }, correctAnswer: 'A', explanation: '描述骨折移位时，通常以位置固定的骨折近端为参照，描述骨折远端的移位方向和程度。' },
+            { id: 43, category: '骨骼肌肉系统', type: 'mcq', question: '下列关于慢性化脓性骨髓炎的描述错误的是', options: { A: '骨质增生硬化明显', B: '见不到死骨', C: '仍可见骨质破坏', D: '骨髓腔变窄,骨干增粗', E: '骨内膜和骨外膜明显增生' }, correctAnswer: 'B', explanation: '慢性化脓性骨髓炎的特征性X线表现是死骨形成、骨质破坏和骨质增生硬化并存。死骨（Sequestrum）是其典型特征之一。' },
+            { id: 44, category: '骨骼肌肉系统', type: 'mcq', question: '下列关于脊柱结核的描述,错误的是', options: { A: '是最常见的骨结核', B: '多继发于肺结核', C: '椎体骨质破坏伴椎间隙变窄', D: '可有椎旁脓肿', E: '颈椎结核无椎旁脓肿' }, correctAnswer: 'E', explanation: '任何节段的脊柱结核都可以形成椎旁脓肿。颈椎结核可形成咽后壁脓肿或椎旁脓肿。' },
+            { id: 45, category: '骨骼肌肉系统', type: 'mcq', question: '下列关于良性骨肿瘤的描述,错误的是', options: { A: '可见病理性骨折', B: '浸润性生长', C: '一般无骨膜反应', D: '可以是多发性病变', E: '压迫邻近组织器官' }, correctAnswer: 'B', explanation: '浸润性生长是恶性肿瘤的特征。良性骨肿瘤通常呈膨胀性生长，边界清晰，有包膜，不浸润周围组织。' },
+            { id: 46, category: '骨骼肌肉系统', type: 'mcq', question: '骨肉瘤的基本X线征不包括', options: { A: '瘤骨', B: '骨质破坏', C: '死骨形成', D: '骨膜增生', E: '软组织肿块' }, correctAnswer: 'C', explanation: '死骨形成是骨髓炎的特征性表现。骨肉瘤的基本X线征象是骨质破坏、肿瘤骨（瘤骨）形成、骨膜反应（如Codman三角、日光射线征）和软组织肿块。' },
+            { id: 47, category: '骨骼肌肉系统', type: 'case', question: '50岁男性，跌倒时右手掌着地，右腕部肿胀疼痛。X线示桡骨远端向背侧、桡侧移位，断端向掌侧成角畸形。最可能的诊断是', options: { A: 'Colles骨折', B: 'Chance骨折', C: 'Barton骨折', D: 'Smith骨折', E: 'Jefferson骨折' }, correctAnswer: 'A', explanation: 'Colles骨折是伸直型桡骨远端骨折，典型移位是远端向背侧、桡侧移位，形成所谓的“银叉”畸形。' },
+            { id: 68, category: '骨骼肌肉系统', type: 'mcq', question: '好发于长骨干骺端的是', options: { A: '骨肉瘤', B: '骨转移瘤', C: '骨巨细胞瘤', D: '软骨瘤', E: '骨瘤' }, correctAnswer: 'A', explanation: '骨肉瘤最好发于青少年长骨的干骺端，尤其是膝关节周围（股骨远端、胫骨近端）。' },
+            { id: 69, category: '骨骼肌肉系统', type: 'mcq', question: '好发于躯干骨的是', options: { A: '骨肉瘤', B: '骨转移瘤', C: '骨巨细胞瘤', D: '软骨瘤', E: '骨瘤' }, correctAnswer: 'B', explanation: '成年人骨转移瘤最好发于富含红骨髓的部位，如椎体、骨盆、肋骨、颅骨等中轴骨（躯干骨）。' },
+            { id: 70, category: '骨骼肌肉系统', type: 'mcq', question: '好发于长骨骨端的是', options: { A: '骨肉瘤', B: '骨转移瘤', C: '骨巨细胞瘤', D: '软骨瘤', E: '骨瘤' }, correctAnswer: 'C', explanation: '骨巨细胞瘤好发于骨骺已闭合的成年人，典型部位是长骨的骨端（骨骺区）。' },
+            { id: 71, category: '骨骼肌肉系统', type: 'mcq', question: '骨囊肿属于', options: { A: '良性骨肿瘤', B: '恶性骨肿瘤', C: '肿瘤样病变', D: '炎性肉芽肿', E: '交界性肿瘤' }, correctAnswer: 'C', explanation: '骨囊肿、骨纤维结构不良等属于肿瘤样病变，它们具有肿瘤样的影像学表现但并非真性肿瘤。' },
+            { id: 72, category: '骨骼肌肉系统', type: 'mcq', question: '软骨瘤属于', options: { A: '良性骨肿瘤', B: '恶性骨肿瘤', C: '肿瘤样病变', D: '炎性肉芽肿', E: '交界性肿瘤' }, correctAnswer: 'A', explanation: '软骨瘤是一种常见的良性骨肿瘤。' },
+            { id: 73, category: '骨骼肌肉系统', type: 'mcq', question: '骨肉瘤属于', options: { A: '良性骨肿瘤', B: '恶性骨肿瘤', C: '肿瘤样病变', D: '炎性肉芽肿', E: '交界性肿瘤' }, correctAnswer: 'B', explanation: '骨肉瘤是最常见的原发性恶性骨肿瘤。' },
+            { id: 74, category: '骨骼肌肉系统', type: 'case', question: '男性，15岁，右股骨下端疼痛3个月，逐渐加重。查体：右大腿下段增粗，有压痛，其表面有增粗的血管，皮温高。X线见股骨干骺端溶骨性骨质破坏，骨膜增生在病灶边缘形成三角形，骨质破坏周围有软组织肿块。最可能的诊断是', options: { A: '骨巨细胞瘤', B: '骨肉瘤', C: '骨软骨瘤', D: '骨结核', E: '慢性骨髓炎' }, correctAnswer: 'B', explanation: '青少年、长骨干骺端、疼痛、骨质破坏伴软组织肿块、Codman三角（骨膜反应），这些都是骨肉瘤的典型临床和影像学特征。' },
+
+            // --- 名词解释 ---
+            { id: 101, category: '名词解释', type: 'short', question: '部分容积效应', correctAnswer: '在CT扫描中，当一个体素（voxel）内同时包含了两种或两种以上不同密度的组织时，所测得的CT值是这些组织CT值的平均值，不能真实反映其中任何一种组织的密度，这种现象称为部分容积效应。', explanation: '常发生于小病灶、器官边缘或倾斜的界面处。' },
+            { id: 102, category: '名词解释', type: 'short', question: '骨膜三角 (Codman三角)', correctAnswer: '当恶性骨肿瘤生长迅速，穿破骨皮质并掀起骨膜时，肿瘤仅在掀起的骨膜两端有时间形成新生骨，在X线上表现为一个三角形的骨膜反应影，这个三角称为Codman三角。', explanation: '它是骨肉瘤等恶性肿瘤的特征性征象之一，提示肿瘤具有侵袭性。' },
+            { id: 103, category: '名词解释', type: 'short', question: '肺门截断征', correctAnswer: '指肺动脉高压时，中央肺动脉（肺门处）扩张增粗，而外周肺动脉分支急剧变细，形成鲜明对比，如同被“截断”一样，这种征象称为肺门截断征。', explanation: '是诊断肺动脉高压的重要X线征象。' },
+            { id: 104, category: '名词解释', type: 'short', question: '充气支气管征', correctAnswer: '在肺实变区域（如大叶性肺炎），肺泡被炎性渗出物填充而呈高密度影，但其内的支气管仍然保持通畅并含有气体，因而在实变的肺组织背景衬托下，显示为树枝状的含气低密度影，此征象称为充气支气管征。', explanation: '是大叶性肺炎的典型征象，也可在肺水肿、肺泡癌等疾病中见到。' },
+            { id: 105, category: '名词解释', type: 'short', question: '半月综合征', correctAnswer: '见于恶性胃溃疡（胃癌），龛影形状不规则，多成半月形，位于胃轮廓之内，周围绕以宽窄不等的透明带即环堤，环堤上见结节状和指压迹状充盈缺损（指压征），以上表现称之为半月综合征。', explanation: '是X线钡餐检查诊断胃癌的重要征象。' },
+            { id: 106, category: '名词解释', type: 'short', question: 'Colles骨折', correctAnswer: '指桡骨远端3cm范围内的伸展型骨折，多见于中老年人摔倒时手掌着地。X线表现为桡骨远端骨皮质不连续，骨折远端向背侧、桡侧移位，可形成“银叉”畸形。', explanation: '是最常见的腕部骨折类型。' },
+             { id: 107, category: '名词解释', type: 'short', question: '骨质疏松', correctAnswer: '指单位体积内正常钙化的骨组织减少的病理状态，即骨组织的有机成分（骨基质）和矿物质（钙盐）成比例减少，导致骨量减少、骨微结构破坏，骨脆性增加，易于发生骨折。', explanation: '影像学表现为骨密度减低，骨小梁稀疏，骨皮质变薄。' },
+
+            // --- 简答题 ---
+            { id: 201, category: '简答题', type: 'short', question: '简述肺部空洞性病变鉴别要点', correctAnswer: '1. **肺癌空洞**：多为厚壁空洞（>3mm），壁厚薄不均，内壁凹凸不平，可见壁结节。空洞偏心，常有分叶、毛刺及胸膜凹陷征。\n2. **肺结核空洞**：多为薄壁空洞，内壁光滑。慢性纤维空洞可为厚壁，但内壁仍较光整。空洞周围常见卫星灶、索条状阴影，常有引流支气管征。\n3. **肺脓肿空洞**：多为厚壁，但内外壁均较光整，周围炎症浸润明显，边界模糊。特征性表现为洞内有液平。', explanation: '鉴别时需结合病史、临床表现和空洞的位置、壁的厚度与形态、内壁情况、内容物及周围病变等综合判断。' },
+            { id: 202, category: '简答题', type: 'short', question: '简述胃良、恶性溃疡的X线造影的鉴别诊断要点', correctAnswer: '1. **龛影位置**：良性溃疡的龛影突出于胃轮廓线之外；恶性溃疡的龛影位于胃轮廓线之内。\n2. **龛影形态**：良性多为圆形或椭圆形，边缘光滑；恶性多呈不规则形，如半月形，边缘不齐。\n3. **周围黏膜**：良性可见黏膜皱襞向龛影口部集中、纠集，且柔软；恶性可见黏膜皱襞中断、破坏、紊乱，形成环堤征、指压迹。\n4. **附近胃壁**：良性胃壁柔软，蠕动波可以通过；恶性胃壁僵硬，蠕动波中断或消失。', explanation: '恶性溃疡的环堤征（半月综合征）和龛影位于轮廓内是重要的鉴别点。' },
+            { id: 203, category: '简答题', type: 'short', question: '简述肝细胞癌的CT表现', correctAnswer: '1. **平扫**：多呈等或稍低密度肿块，边界不清，大病灶可因出血、坏死、脂肪变而密度不均。部分可见假包膜（低密度环）。\n2. **增强扫描**：具有“快进快出”的典型特征。\n   - **动脉期**：由于肿瘤主要由肝动脉供血，病灶明显不均匀强化，常高于周围肝实质。\n   - **门静脉期和延迟期**：造影剂迅速廓清，病灶密度快速下降，低于正常肝实质，呈相对低密度。假包膜在延迟期可呈延迟强化。\n3. **其他征象**：常伴有门静脉癌栓形成、肝内转移灶、肝硬化背景、腹水及淋巴结肿大等。', explanation: '“快进快出”是肝细胞癌诊断中最具特异性的表现。' },
+        ];
+
+        // --- APPLICATION LOGIC ---
+        const app = {
+            // --- State ---
+            questions: [],
+            currentCategory: null,
+            currentQuestionIndex: 0,
+            isQuizMode: false,
+            userAnswers: {}, // { qId: answer }
+            score: 0,
+            mistakenQuestions: {}, // { qId: true }
+
+            // --- DOM Elements ---
+            dom: {
+                sidebar: document.getElementById('sidebar'),
+                menuButton: document.getElementById('menu-button'),
+                closeSidebarButton: document.getElementById('close-sidebar'),
+                categoryNav: document.getElementById('category-nav').querySelector('ul'),
+                quizContainer: document.getElementById('quiz-container'),
+                welcomeMessage: document.getElementById('welcome-message'),
+                randomQuizBtn: document.getElementById('random-quiz-btn'),
+                mistakeBookBtn: document.getElementById('mistake-book-btn'),
+                mistakeCounter: document.getElementById('mistake-counter'),
+                clearMistakesBtn: document.getElementById('clear-mistakes-btn'),
+                quizControls: document.getElementById('quiz-controls'),
+                prevBtn: document.getElementById('prev-btn'),
+                nextBtn: document.getElementById('next-btn'),
+                questionCounter: document.getElementById('question-counter'),
+                quizResults: document.getElementById('quiz-results'),
+            },
+
+            // --- Initialization ---
+            init() {
+                this.loadMistakes();
+                this.populateCategories();
+                this.addEventListeners();
+                this.showWelcomeMessage();
+                this.updateMistakeCounter();
+            },
+
+            addEventListeners() {
+                this.dom.categoryNav.addEventListener('click', this.handleCategoryClick.bind(this));
+                this.dom.randomQuizBtn.addEventListener('click', this.startRandomQuiz.bind(this));
+                this.dom.mistakeBookBtn.addEventListener('click', this.startMistakeQuiz.bind(this));
+                this.dom.clearMistakesBtn.addEventListener('click', this.clearAllMistakes.bind(this));
+                this.dom.quizContainer.addEventListener('click', this.handleOptionClick.bind(this));
+                this.dom.nextBtn.addEventListener('click', () => this.changeQuestion(1));
+                this.dom.prevBtn.addEventListener('click', () => this.changeQuestion(-1));
+                this.dom.menuButton.addEventListener('click', () => this.dom.sidebar.classList.add('open'));
+                this.dom.closeSidebarButton.addEventListener('click', () => this.dom.sidebar.classList.remove('open'));
+            },
+
+            // --- UI Rendering ---
+            populateCategories() {
+                const categories = [...new Set(allQuestions.map(q => q.category))];
+                this.dom.categoryNav.innerHTML = categories.map(cat => `
+                    <li>
+                        <a href="#" data-category="${cat}" class="flex items-center p-2 text-base font-normal text-gray-700 rounded-lg hover:bg-gray-100">
+                            <span class="ml-3">${cat}</span>
+                        </a>
+                    </li>
+                `).join('');
+            },
+            
+            showWelcomeMessage() {
+                this.dom.welcomeMessage.classList.remove('hidden');
+                this.dom.quizContainer.innerHTML = '';
+                this.dom.quizContainer.appendChild(this.dom.welcomeMessage);
+                this.dom.quizControls.classList.add('hidden');
+                this.dom.quizResults.classList.add('hidden');
+                this.updateActiveLink(null);
+            },
+
+            renderQuestion(question) {
+                if (!question) {
+                    this.dom.quizContainer.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-md text-center"><p class="text-lg">该模块下没有题目了。</p></div>`;
+                    this.dom.quizControls.classList.add('hidden');
+                    return;
+                }
+                const userAnswer = this.userAnswers[question.id];
+                const isAnswered = userAnswer !== undefined;
+                
+                let optionsHtml = '';
+                if (question.type === 'mcq' || question.type === 'case') {
+                    optionsHtml = Object.entries(question.options).map(([key, value]) => {
+                        let optionClass = 'border-gray-300 bg-white hover:bg-gray-50';
+                        if (isAnswered) {
+                            if (key === question.correctAnswer) {
+                                optionClass = 'correct';
+                            } else if (key === userAnswer) {
+                                optionClass = 'incorrect';
+                            }
+                        }
+                        return `
+                        <div class="quiz-option p-4 border-2 rounded-lg cursor-pointer ${optionClass}" data-option="${key}">
+                            <span class="font-bold mr-3">${key}.</span>
+                            <span>${value}</span>
+                        </div>`;
+                    }).join('');
+                }
+
+                this.dom.quizContainer.innerHTML = `
+                    <div class="bg-white p-6 rounded-xl shadow-md animate-fade-in">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="bg-indigo-100 text-indigo-800 text-sm font-medium px-3 py-1 rounded-full">${question.category}</span>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-5 leading-relaxed">${question.question.replace(/\n/g, '<br>')}</h3>
+                        ${(question.type === 'mcq' || question.type === 'case') ? `<div class="space-y-4">${optionsHtml}</div>` : ''}
+                        
+                        <div class="mt-6">
+                            <button class="show-answer-btn w-full sm:w-auto bg-gray-200 text-gray-800 py-2 px-5 rounded-lg font-semibold hover:bg-gray-300 transition ${isAnswered ? 'hidden':''}">显示答案</button>
+                            <div class="explanation-container mt-4 ${!isAnswered ? 'hidden' : ''}">
+                                <p class="text-lg font-semibold mb-2">正确答案: <span class="text-green-600">${question.correctAnswer}</span></p>
+                                <div class="explanation p-4 rounded-lg text-gray-700">${question.correctAnswer.length > 2 ? question.correctAnswer.replace(/\n/g, '<br>') : question.explanation.replace(/\n/g, '<br>')}</div>
+                            </div>
+                        </div>
+                    </div>`;
+
+                // For definitions/short answers, clicking "Show Answer" reveals the content
+                if(isAnswered && (question.type === 'short')) {
+                    this.dom.quizContainer.querySelector('.explanation-container').classList.remove('hidden');
+                    this.dom.quizContainer.querySelector('.show-answer-btn').classList.add('hidden');
+                }
+            },
+            
+            renderQuizResults() {
+                this.dom.quizControls.classList.add('hidden');
+                this.dom.quizResults.classList.remove('hidden');
+                const percentage = Math.round((this.score / this.questions.length) * 100);
+
+                this.dom.quizResults.innerHTML = `
+                    <div class="bg-white p-8 rounded-xl shadow-md text-center animate-fade-in">
+                        <h2 class="text-3xl font-bold mb-4">测验完成!</h2>
+                        <p class="text-xl text-gray-700 mb-2">你的得分:</p>
+                        <p class="text-5xl font-extrabold text-indigo-600 mb-6">${this.score} / ${this.questions.length} (${percentage}%)</p>
+                        <button id="restart-quiz-btn" class="bg-indigo-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-indigo-700 transition">再试一次</button>
+                    </div>`;
+                document.getElementById('restart-quiz-btn').addEventListener('click', () => this.startRandomQuiz());
+            },
+
+            updateControls() {
+                 if (this.questions.length <= 1) {
+                    this.dom.quizControls.classList.add('hidden');
+                    return;
+                }
+                this.dom.quizControls.classList.remove('hidden');
+                this.dom.questionCounter.textContent = `${this.currentQuestionIndex + 1} / ${this.questions.length}`;
+                this.dom.prevBtn.disabled = this.currentQuestionIndex === 0;
+                
+                if (this.isQuizMode && this.currentQuestionIndex === this.questions.length - 1) {
+                    this.dom.nextBtn.textContent = '完成测验';
+                    this.dom.nextBtn.disabled = false;
+                } else {
+                     this.dom.nextBtn.textContent = '下一题';
+                     this.dom.nextBtn.disabled = this.currentQuestionIndex === this.questions.length - 1;
+                }
+            },
+            
+            updateActiveLink(category) {
+                 this.dom.categoryNav.querySelectorAll('a').forEach(a => a.classList.remove('bg-gray-200', 'font-semibold'));
+                 if(category) {
+                     const link = this.dom.categoryNav.querySelector(`a[data-category="${category}"]`);
+                     if (link) {
+                         link.classList.add('bg-gray-200', 'font-semibold');
+                     }
+                 }
+            },
+            
+            // --- Event Handlers ---
+            handleCategoryClick(e) {
+                e.preventDefault();
+                const link = e.target.closest('a');
+                if (!link) return;
+                
+                const category = link.dataset.category;
+                this.dom.sidebar.classList.remove('open');
+                this.startCategory(category);
+                this.updateActiveLink(category);
+            },
+
+            handleOptionClick(e) {
+                const optionDiv = e.target.closest('.quiz-option');
+                const answerBtn = e.target.closest('.show-answer-btn');
+                const question = this.questions[this.currentQuestionIndex];
+                if (!question || this.userAnswers[question.id] !== undefined) return;
+
+                if (optionDiv) {
+                    const selectedAnswer = optionDiv.dataset.option;
+                    this.userAnswers[question.id] = selectedAnswer;
+                    if (selectedAnswer === question.correctAnswer) {
+                        this.score++;
+                        if (this.mistakenQuestions[question.id]) {
+                            this.removeMistake(question.id);
+                        }
+                    } else {
+                        this.saveMistake(question.id);
+                    }
+                    this.renderQuestion(question);
+                }
+
+                if (answerBtn) {
+                     this.userAnswers[question.id] = 'revealed'; // Mark as revealed
+                     this.renderQuestion(question);
+                }
+            },
+
+            // --- Logic ---
+            startCategory(category) {
+                this.isQuizMode = false;
+                this.currentCategory = category;
+                this.questions = allQuestions.filter(q => q.category === category);
+                this.resetQuizState();
+                if (this.questions.length > 0) {
+                    this.dom.welcomeMessage.classList.add('hidden');
+                    this.currentQuestionIndex = 0;
+                    this.renderQuestion(this.questions[0]);
+                    this.updateControls();
+                }
+            },
+            
+            startRandomQuiz() {
+                this.isQuizMode = true;
+                this.currentCategory = 'Random Quiz';
+                this.questions = this.getRandomQuestions(10);
+                this.resetQuizState();
+                if (this.questions.length > 0) {
+                    this.dom.welcomeMessage.classList.add('hidden');
+                    this.currentQuestionIndex = 0;
+                    this.renderQuestion(this.questions[0]);
+                    this.updateControls();
+                }
+                this.dom.sidebar.classList.remove('open');
+                this.updateActiveLink(null);
+            },
+
+            startMistakeQuiz() {
+                this.isQuizMode = false;
+                this.currentCategory = '错题本';
+                const mistakeIds = Object.keys(this.mistakenQuestions);
+                if (mistakeIds.length === 0) {
+                    // Using a simple alert for now. A custom modal would be better.
+                    alert('错题本是空的，太棒了！');
+                    return;
+                }
+                this.questions = allQuestions.filter(q => this.mistakenQuestions[q.id]);
+                this.resetQuizState();
+                this.dom.welcomeMessage.classList.add('hidden');
+                this.currentQuestionIndex = 0;
+                this.renderQuestion(this.questions[0]);
+                this.updateControls();
+                this.dom.sidebar.classList.remove('open');
+                this.updateActiveLink('错题本');
+            },
+            
+            resetQuizState() {
+                this.currentQuestionIndex = 0;
+                this.score = 0;
+                this.userAnswers = {};
+                this.dom.quizResults.classList.add('hidden');
+                this.dom.quizContainer.innerHTML = '';
+            },
+
+            getRandomQuestions(num) {
+                const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
+                return shuffled.slice(0, num);
+            },
+            
+            changeQuestion(direction) {
+                const newIndex = this.currentQuestionIndex + direction;
+                if (this.isQuizMode && newIndex === this.questions.length) {
+                    this.renderQuizResults();
+                    return;
+                }
+                if (newIndex >= 0 && newIndex < this.questions.length) {
+                    this.currentQuestionIndex = newIndex;
+                    this.renderQuestion(this.questions[this.currentQuestionIndex]);
+                    this.updateControls();
+                }
+            },
+
+            // --- Mistake Book Logic ---
+            loadMistakes() {
+                const mistakes = localStorage.getItem('imagingQuizMistakes');
+                this.mistakenQuestions = mistakes ? JSON.parse(mistakes) : {};
+            },
+            saveMistake(questionId) {
+                this.mistakenQuestions[questionId] = true;
+                localStorage.setItem('imagingQuizMistakes', JSON.stringify(this.mistakenQuestions));
+                this.updateMistakeCounter();
+            },
+            removeMistake(questionId) {
+                delete this.mistakenQuestions[questionId];
+                localStorage.setItem('imagingQuizMistakes', JSON.stringify(this.mistakenQuestions));
+                this.updateMistakeCounter();
+            },
+            clearAllMistakes() {
+                // Using a simple confirm for now.
+                if (confirm('确定要清空所有错题记录吗？此操作无法撤销。')) {
+                    this.mistakenQuestions = {};
+                    localStorage.removeItem('imagingQuizMistakes');
+                    this.updateMistakeCounter();
+                    if(this.currentCategory === '错题本') {
+                        this.showWelcomeMessage();
+                    }
+                }
+            },
+            updateMistakeCounter() {
+                const count = Object.keys(this.mistakenQuestions).length;
+                this.dom.mistakeCounter.textContent = count;
+                this.dom.mistakeCounter.classList.toggle('hidden', count === 0);
+            },
+        };
+
+        // --- Start Application ---
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
+        });
+    </script>
+
+</body>
+</html>
